@@ -40,11 +40,11 @@ namespace PinquarkWMSToERPSynchro.Service
             CancellationToken stoppingToken)
         {
             _logger.LogInformation(
-                "Starting sync loop for {EndpointName} with interval {Interval} minutes",
+                "Starting sync loop for {EndpointName} with interval {Interval} seconds",
                 endpoint.Name,
-                endpoint.SyncIntervalMinutes);
+                endpoint.SyncIntervalSeconds);
 
-            using var timer = new PeriodicTimer(TimeSpan.FromMinutes(endpoint.SyncIntervalMinutes));
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(endpoint.SyncIntervalSeconds));
 
             await ExecuteSyncWithDependenciesAsync(endpoint, endpointsByName, stoppingToken);
 

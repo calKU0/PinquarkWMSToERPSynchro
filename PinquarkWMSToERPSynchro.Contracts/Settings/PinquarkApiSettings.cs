@@ -12,7 +12,7 @@
     {
         public string Name { get; set; }
         public string Endpoint { get; set; }
-        public int SyncIntervalMinutes { get; set; }
+        public int SyncIntervalSeconds { get; set; }
         public List<string> DependsOn { get; set; } = new();
     }
 }
