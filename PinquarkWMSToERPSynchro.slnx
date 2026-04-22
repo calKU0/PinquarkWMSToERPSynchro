@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="PinquarkWMSToERPSynchro.Contracts/PinquarkWMSToERPSynchro.Contracts.csproj" />
+  <Project Path="PinquarkWMSToErpSynchro.Database/PinquarkWMSToERPSynchro.Database.csproj" Id="2b2fb4cb-097a-464f-a3c8-4687bbf7e44c" DisplayName="PinquarkWMSToERPSynchro.Database" />
+  <Project Path="PinquarkWMSToERPSynchro.Infrastructure/PinquarkWMSToERPSynchro.Infrastructure.csproj" />
+  <Project Path="PinquarkWMSToERPSynchro.Service/PinquarkWMSToERPSynchro.Service.csproj" />
+</Solution>
