@@ -11,23 +11,24 @@ namespace PinquarkWMSToERPSynchro.Infrastructure.Mappings
 
             foreach (var response in responses)
             {
-                if (string.IsNullOrWhiteSpace(response.ErpDocId))
-                {
-                    continue;
-                }
+                int? erpId = null;
+                int? erpType = null;
 
-                var parts = response.ErpDocId.Split('|');
-                if (parts.Length < 2)
+                if (!string.IsNullOrWhiteSpace(response.ErpDocId))
                 {
-                    continue;
-                }
+                    var parts = response.ErpDocId.Split('|');
 
-                var erpIdPart = parts.Length == 2 ? parts[0] : parts[1];
-                var erpTypePart = parts.Length == 2 ? parts[1] : parts[2];
+                    if (parts.Length >= 2)
+                    {
+                        var erpIdPart = parts.Length == 2 ? parts[0] : parts[1];
+                        var erpTypePart = parts.Length == 2 ? parts[1] : parts[2];
 
-                if (!int.TryParse(erpIdPart, out var erpId) || !int.TryParse(erpTypePart, out var erpType))
-                {
-                    continue;
+                        if (int.TryParse(erpIdPart, out var parsedId))
+                            erpId = parsedId;
+
+                        if (int.TryParse(erpTypePart, out var parsedType))
+                            erpType = parsedType;
+                    }
                 }
 
                 result.Add(new Document

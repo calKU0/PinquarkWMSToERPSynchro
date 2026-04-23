@@ -172,7 +172,7 @@ namespace PinquarkWMSToERPSynchro.Service.Services
             var request = new GetOperationsRequest
             {
                 DateFrom = await _operationRepository.GetLastSyncDateAsync(cancellationToken),
-                DateTo = DateTime.Now,
+                DateTo = DateTime.Now.AddSeconds(-1),
             };
 
             _logger.LogInformation("Syncing operations from {DateFrom} to {DateTo}", request.DateFrom, request.DateTo);

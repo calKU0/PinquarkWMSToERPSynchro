@@ -4,8 +4,8 @@
     {
         public int Id { get; set; }
         public string Symbol { get; set; }
-        public int ErpId { get; set; }
-        public int ErpType { get; set; }
+        public int? ErpId { get; set; }
+        public int? ErpType { get; set; }
         public string Status { get; set; }
         public int StatusId { get; set; }
         public string Type { get; set; }

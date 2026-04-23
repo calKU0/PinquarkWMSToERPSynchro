@@ -9,6 +9,7 @@ namespace PinquarkWMSToERPSynchro.Service
         private readonly ILogger<Worker> _logger;
         private readonly IServiceProvider _serviceProvider;
         private readonly PinquarkApiSettings _apiSettings;
+        private readonly IReadOnlyDictionary<string, SyncEndpoint> _endpointsByName;
 
         public Worker(
             ILogger<Worker> logger,
@@ -18,103 +19,79 @@ namespace PinquarkWMSToERPSynchro.Service
             _logger = logger;
             _serviceProvider = serviceProvider;
             _apiSettings = apiOptions.Value;
+
+            _endpointsByName = _apiSettings.Endpoints
+                .ToDictionary(e => e.Name, StringComparer.OrdinalIgnoreCase);
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("Worker Service started at: {time}", DateTimeOffset.Now);
 
-            var endpointsByName = _apiSettings.Endpoints
-                .ToDictionary(e => e.Name, StringComparer.OrdinalIgnoreCase);
-
+            // We only start loops for endpoints. 
+            // Dependencies are handled inside each loop iteration to ensure freshness.
             var syncTasks = _apiSettings.Endpoints.Select(endpoint =>
-                RunEndpointSyncAsync(endpoint, endpointsByName, stoppingToken)
+                RunEndpointLoopAsync(endpoint, stoppingToken)
             );
 
             await Task.WhenAll(syncTasks);
         }
 
-        private async Task RunEndpointSyncAsync(
-            SyncEndpoint endpoint,
-            IReadOnlyDictionary<string, SyncEndpoint> endpointsByName,
-            CancellationToken stoppingToken)
+        private async Task RunEndpointLoopAsync(SyncEndpoint endpoint, CancellationToken stoppingToken)
         {
-            _logger.LogInformation(
-                "Starting sync loop for {EndpointName} with interval {Interval} seconds",
-                endpoint.Name,
-                endpoint.SyncIntervalSeconds);
+            _logger.LogInformation("Starting loop for {Name} (Interval: {Sec}s)", endpoint.Name, endpoint.SyncIntervalSeconds);
 
             using var timer = new PeriodicTimer(TimeSpan.FromSeconds(endpoint.SyncIntervalSeconds));
 
-            await ExecuteSyncWithDependenciesAsync(endpoint, endpointsByName, stoppingToken);
-
-            while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
+            do
             {
-                await ExecuteSyncWithDependenciesAsync(endpoint, endpointsByName, stoppingToken);
-            }
+                // Each tick performs the full chain: Dependencies -> Main Endpoint
+                await SyncChainAsync(endpoint, stoppingToken);
+
+            } while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken));
         }
 
-        private async Task ExecuteSyncWithDependenciesAsync(
-            SyncEndpoint endpoint,
-            IReadOnlyDictionary<string, SyncEndpoint> endpointsByName,
-            CancellationToken stoppingToken)
+        private async Task SyncChainAsync(SyncEndpoint endpoint, CancellationToken stoppingToken)
         {
-            var executing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            await ExecuteEndpointAndDependenciesAsync(endpoint, endpointsByName, executing, stoppingToken);
+            // We use a Local HashSet to prevent circular infinite loops within a single chain
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await ExecuteStepAsync(endpoint, visited, stoppingToken);
         }
 
-        private async Task ExecuteEndpointAndDependenciesAsync(
-            SyncEndpoint endpoint,
-            IReadOnlyDictionary<string, SyncEndpoint> endpointsByName,
-            HashSet<string> executing,
-            CancellationToken stoppingToken)
+        private async Task ExecuteStepAsync(SyncEndpoint endpoint, HashSet<string> visited, CancellationToken stoppingToken)
         {
-            if (!executing.Add(endpoint.Name))
-            {
-                _logger.LogWarning("Circular dependency detected for endpoint {EndpointName}", endpoint.Name);
-                return;
-            }
+            if (!visited.Add(endpoint.Name)) return;
 
-            try
+            // 1. Sync all dependencies FIRST to ensure they are fresh for the current main sync
+            if (endpoint.DependsOn != null)
             {
-                foreach (var dependencyName in endpoint.DependsOn)
+                foreach (var depName in endpoint.DependsOn)
                 {
-                    if (!endpointsByName.TryGetValue(dependencyName, out var dependencyEndpoint))
+                    if (_endpointsByName.TryGetValue(depName, out var depEndpoint))
                     {
-                        _logger.LogWarning(
-                            "Dependency endpoint {DependencyName} configured for {EndpointName} was not found",
-                            dependencyName,
-                            endpoint.Name);
-                        continue;
+                        _logger.LogInformation("Syncing dependency {Dep} for {Main}", depName, endpoint.Name);
+                        await ExecuteStepAsync(depEndpoint, visited, stoppingToken);
                     }
-
-                    await ExecuteEndpointAndDependenciesAsync(
-                        dependencyEndpoint,
-                        endpointsByName,
-                        executing,
-                        stoppingToken);
                 }
+            }
 
-                await ExecuteSyncAsync(endpoint, stoppingToken);
-            }
-            finally
-            {
-                executing.Remove(endpoint.Name);
-            }
+            // 2. Now sync the actual endpoint
+            await PerformSyncActionAsync(endpoint, stoppingToken);
         }
 
-        private async Task ExecuteSyncAsync(SyncEndpoint endpoint, CancellationToken stoppingToken)
+        private async Task PerformSyncActionAsync(SyncEndpoint endpoint, CancellationToken stoppingToken)
         {
             try
             {
                 using var scope = _serviceProvider.CreateScope();
                 var syncService = scope.ServiceProvider.GetRequiredService<ISyncService>();
 
+                _logger.LogDebug("Executing sync for {EndpointName}", endpoint.Name);
                 await syncService.SyncAsync(endpoint.Name, endpoint.Endpoint, stoppingToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error executing sync for {EndpointName}", endpoint.Name);
+                _logger.LogError(ex, "Error syncing {EndpointName}", endpoint.Name);
             }
         }
     }
