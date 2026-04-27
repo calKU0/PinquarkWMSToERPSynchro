@@ -138,8 +138,8 @@ namespace PinquarkWMSToERPSynchro.Service.Services
         {
             var request = new GetTasksRequest
             {
-                DateFrom = DateTime.Now.AddDays(-7).Date,
-                DateTo = DateTime.Now.Date,
+                DateFrom = DateTime.UtcNow.AddDays(-7).Date,
+                DateTo = DateTime.UtcNow.Date,
                 Statuses = new List<int> { 0, 1, 3, 12, 13, 14 }
             };
 
@@ -172,7 +172,7 @@ namespace PinquarkWMSToERPSynchro.Service.Services
             var request = new GetOperationsRequest
             {
                 DateFrom = await _operationRepository.GetLastSyncDateAsync(cancellationToken),
-                DateTo = DateTime.Now.AddSeconds(-1),
+                DateTo = DateTime.UtcNow.AddSeconds(-3),
             };
 
             _logger.LogInformation("Syncing operations from {DateFrom} to {DateTo}", request.DateFrom, request.DateTo);
@@ -196,7 +196,7 @@ namespace PinquarkWMSToERPSynchro.Service.Services
             var request = new GetCustomOperetionsRequest
             {
                 DateFrom = await _customOperationRepository.GetLastSyncDateAsync(cancellationToken),
-                DateTo = DateTime.Now,
+                DateTo = DateTime.UtcNow,
             };
 
             _logger.LogInformation("Syncing custom operations from {DateFrom} to {DateTo}", request.DateFrom, request.DateTo);
